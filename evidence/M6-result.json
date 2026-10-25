@@ -1,0 +1,81 @@
+{
+  "faultMatrixPassed": true,
+  "resetCheckPending": false,
+  "deploymentAnchor": {
+    "blockNumber": "12",
+    "blockHash": "0xae15f8854ac8f70292e79b82d9c8230da0b5f7fdbf1d6fe2650ccf65f938238f"
+  },
+  "evidence": [
+    {
+      "case": "concurrent/repeated and identity conflicts",
+      "transaction": "0x1cbd6fc329796105b5ebeb94705103d5f29be7d2bbc1caf2c571ca4bc0aa6db1",
+      "calls": 4,
+      "charges": 1,
+      "executions": 1
+    },
+    {
+      "case": "lost settlement response",
+      "transaction": "0x5d8fc7c2c7e7cabf501791fd956e0cc9b519dd511c24cf0fb066e100cc2d2348",
+      "charges": 1,
+      "executions": 1
+    },
+    {
+      "case": "pending then mined",
+      "initialStatus": "pending",
+      "transaction": "0x8705e28f30ae812442dc215ac75bf6e892b5f9561cb60a3135714d430fbfbb8d",
+      "executionsWhilePending": 0,
+      "charges": 1
+    },
+    {
+      "case": "server restart after settlement",
+      "transaction": "0xc29be5ce1d56e9603e5f86191b5e3221572eb4f6067558f2ff67c551c13fe00a",
+      "charges": 1,
+      "executions": 1
+    },
+    {
+      "case": "definitive failure without gas",
+      "status": "failed",
+      "charges": 0,
+      "executions": 0
+    },
+    {
+      "case": "service exception after payment",
+      "transaction": "0xfefd4c719f46910c5d33c03150524525831da7060b4b0ce59ecce4335311cc43",
+      "status": "paid-undelivered",
+      "charges": 1,
+      "automaticRefund": false
+    },
+    {
+      "case": "facilitator crash before hash persistence",
+      "transaction": "0xfec4e796dfada8463197a883020579161ef6c21241dc9df3050051b6b2f84d60",
+      "reconciledFrom": "AuthorizationUsed and Transfer logs",
+      "charges": 1
+    },
+    {
+      "case": "completed result after response loss and restart",
+      "transaction": "0x110f7d06db3133a39790827ce5a88b1d76c54746857a92bb5293375303f2fc1a",
+      "charges": 1,
+      "executions": 1
+    },
+    {
+      "case": "observed payment events",
+      "transferCount": 7,
+      "transactions": [
+        "0x1cbd6fc329796105b5ebeb94705103d5f29be7d2bbc1caf2c571ca4bc0aa6db1",
+        "0x5d8fc7c2c7e7cabf501791fd956e0cc9b519dd511c24cf0fb066e100cc2d2348",
+        "0x8705e28f30ae812442dc215ac75bf6e892b5f9561cb60a3135714d430fbfbb8d",
+        "0xc29be5ce1d56e9603e5f86191b5e3221572eb4f6067558f2ff67c551c13fe00a",
+        "0xfefd4c719f46910c5d33c03150524525831da7060b4b0ce59ecce4335311cc43",
+        "0xfec4e796dfada8463197a883020579161ef6c21241dc9df3050051b6b2f84d60",
+        "0x110f7d06db3133a39790827ce5a88b1d76c54746857a92bb5293375303f2fc1a"
+      ]
+    },
+    {
+      "case": "actual Hardhat node restart/reset",
+      "oldManifestRejected": true,
+      "staleResultUnavailable": true,
+      "oldServiceAndFacilitatorStartupRejected": true
+    }
+  ],
+  "passed": true
+}

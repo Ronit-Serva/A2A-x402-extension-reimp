@@ -1,0 +1,16 @@
+{
+  "verifyReadOnly": true,
+  "supportedNetwork": "eip155:31337",
+  "concurrentResults": 2,
+  "settlement": {
+    "success": true,
+    "transaction": "0xb3d7986a1335e360bfe0526dbb0cb1254a5584d18c63666704411eb9b157e093",
+    "network": "eip155:31337",
+    "payer": "0xD6b315621EB6024C9142E1260840B0dbf055e588"
+  },
+  "clientBalance": "98000000",
+  "cardBalance": "2000000",
+  "transferCount": 1,
+  "missingGasRejected": true,
+  "fixtureRestored": true
+}

@@ -1,0 +1,43 @@
+{
+  "requestId": "42642910-0b73-40b1-9368-ed2ac59c6144",
+  "result": {
+    "messageId": "665ec757-eaee-4b67-bfec-38c603c2d376",
+    "contextId": "741f8067-37d3-4c06-b8ce-63c78f4c7e4c",
+    "taskId": "",
+    "role": 2,
+    "parts": [
+      {
+        "content": {
+          "$case": "data",
+          "value": {
+            "count": 3,
+            "sum": 12,
+            "min": 2,
+            "max": 6,
+            "mean": 4
+          }
+        },
+        "filename": "",
+        "mediaType": "application/json"
+      }
+    ],
+    "extensions": [],
+    "referenceTaskIds": []
+  },
+  "receipt": {
+    "success": true,
+    "transaction": "0xc73128fd5c4ee7e8ba31d70c177bec27d90b515484bae30d4e9f3021a54f59cf",
+    "network": "eip155:31337",
+    "payer": "0x3FC66e401140990011Cf096138D9b7B6925b4919"
+  },
+  "challenges": 1,
+  "signatures": 1,
+  "before": {
+    "client": "100000000",
+    "card": "0"
+  },
+  "after": {
+    "client": "98000000",
+    "card": "2000000"
+  }
+}
