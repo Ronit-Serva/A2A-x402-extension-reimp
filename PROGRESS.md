@@ -2,9 +2,14 @@
 
 ## Current status — 2026-10-25
 
-Overall: COMPLETE. M0–M7 passed, including a fresh-chain reproduction with a
+Core prototype: COMPLETE. M0–M7 passed, including a fresh-chain reproduction with a
 separate facilitator and real confirmed token settlement. All processes started
 by the reproduction script were stopped when it finished.
+
+Browser iteration: implementation complete; API/SSE integration, lifecycle checks,
+typechecking, artifact scanning, and original CLI regression checks passed. The
+user approved `iterate.md` before implementation. Rendered browser QA is unavailable
+in this session and remains unverified.
 
 ## Milestone ledger
 
@@ -50,7 +55,7 @@ Final demo: [2,4,6] → count=3, sum=12, min=2, max=6, mean=4; client/card
 100/0 → 98/2 TestUSD. Confirmed transaction:
 `0x216158775e1563e49741f22190bd0592f6f8bbbf581d4bd62bd506edcdf38e2b`.
 
-No further milestone work remains. README contains the verified setup/manual
+No further original milestone work remains. README contains the verified setup/manual
 run/reproduction commands. A new node requires deployment/seed again because
 Hardhat's in-memory state was torn down. The recording walkthrough is a script,
 not a claim that a video exists.
@@ -68,3 +73,38 @@ paid-undelivered. EIP-3009/body binding and local-chain limitations are document
 in PAPER_COMPARISON.md and evidence/M6.md.
 
 No git repository is available. Do not push or publish unless requested.
+
+## Browser iteration — 2026-10-25
+
+- Added local dashboard, `npm run ui`, on `127.0.0.1:4030`.
+- Browser controls start/check node, compilation, deployment fixture, facilitator,
+  and server. Fixed commands, loopback origin/session controls, process ownership,
+  and sanitized bounded SSE logs are implemented.
+- Real IPC checkpoints expose card read, unpaid request, authorization, paid retry,
+  verification, settlement, and confirmed-payment service execution individually.
+- Interactive four-actor diagram follows the supplied reference. Configuration
+  guide explains all current `local.json` fields. Evidence includes live balances,
+  actual token events/receipt, public authorization, and A2A result.
+- Friendly CLI connection errors cover the reported missing server at port 4021.
+- Interrupted runs can resend the same stored proof without a new signature;
+  definitive application outcomes can be acknowledged, while pending state remains
+  unresolved. Public run histories survive backend restart.
+- Initial API/SSE integration passed: all manual checkpoints, a real payment,
+  settlement before computation, cancellation after settlement, same-proof recovery,
+  origin/action restrictions, public output key checks, and chunk-safe redaction.
+- `npm run reproduce` passed M0–M7 after payment instrumentation changes, including
+  pending/mined, no-gas, duplicates, process crashes, stale resets, and final CLI
+  delivery. Final CLI transaction:
+  `0x3e38fe2c99b897d20a64329219587b52fd86a382d20ffea2a051e9834061d7c3`.
+- `npm run typecheck` and browser JavaScript syntax checking passed.
+- Final focused `npm run ui:check`: PASS. It verified real pause expiry, reported
+  CLI-error diagnostics, and actual node-restart invalidation in addition to the
+  payment/recovery flow. See `evidence/UI-result.json` and `evidence/UI.md`.
+- A separate real external-node check passed: the dashboard detected external
+  ownership, rejected its Stop action, and the node continued responding.
+- ANSI/chunk/oversized-line redaction checks passed. Final `check:artifacts` passed:
+  signer permissions 0600, no signer keys in authored/public artifacts, paper intact.
+- Browser inventory is empty (`cua.getState()`); no rendered UI, responsive layout,
+  or keyboard interaction check has been claimed.
+- Final teardown verified ports 4030, 8545, 4022, and 4021 are all free. Start
+  `npm run ui` for a new manual session, then start/deploy through the browser.

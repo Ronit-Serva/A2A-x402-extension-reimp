@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "ui": "tsx apps/dashboard/src/index.ts",
+    "ui:check": "node --import tsx scripts/ui-check.mjs",
     "test": "npm run reproduce",
     "node": "hardhat node --hostname 127.0.0.1",
     "compile": "node scripts/compile.mjs",

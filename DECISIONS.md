@@ -171,3 +171,41 @@ The reproduction script owns/tears down its node and services, retains public
 evidence and namespaces old runtime records. Physical deterministic computation
 may repeat across an arbitrary crash before persistence; there is one logical
 stored result, with no general claim about arbitrary external side effects.
+
+## D009 — Local browser orchestration and manual checkpoints
+
+The user approved `iterate.md` and requested implementation. Add a loopback-only
+Express dashboard on port 4030 with browser-native HTML/CSS/JavaScript and SSE;
+reuse installed packages without dependency changes. The dashboard spawns fixed
+Node argument arrays, tracks process-group ownership, checks actual readiness,
+and never stops externally started services. Mutation routes require a matching
+local origin/host and dashboard-session token. Private keys remain isolated to
+their existing client/facilitator processes.
+
+Walkthrough mode is opt-in through dashboard-created child IPC. The client pauses
+before card retrieval, unpaid submission, signing, and paid retry. An armed
+server request pauses before verify, settle, and post-confirmation computation.
+Checkpoint releases are bound to the request and random checkpoint ID. All pauses
+are bounded to 60 seconds; walkthrough fetch calls have a 240-second timeout.
+The installed SDK forwards fetch signals and adds no implicit manual-step timeout.
+Normal CLI mode has neither pauses nor telemetry mixed into its final JSON.
+Submission/confirmation remain real operations, with no artificial mining gate.
+
+## D010 — Evidence, sanitization, and interrupted-run recovery
+
+Structured IPC events at actual code boundaries drive the educational diagram;
+process output is complementary evidence. Sanitize complete stdout/stderr lines
+before buffering, including Hardhat's startup key lines split across chunks.
+Structured fields omit signing material. SSE retains 1,500 session events; at most
+30 public run histories, each bounded to 500 events, persist under ignored runtime.
+The backend independently queries receipts and token events, and separates current
+RPC balances from historical deployment-fixture snapshots.
+
+Before a walkthrough submits payment, the client saves its exact serialized SDK
+request and proof to an ignored mode-0600 attempt file. Reconciliation runs in the
+client process and resends that same proof; it never creates a new authorization.
+Existing durable server/facilitator logic handles deduplication and uncertain
+settlement. An unresolved submitted attempt blocks a new paid run on the same
+deployment. Only a definitive stored application outcome can be acknowledged as
+closed; cancellation or timeout alone is insufficient. Historical deployment
+records are displayed without claiming fresh confirmation on a replacement chain.

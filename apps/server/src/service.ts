@@ -8,6 +8,7 @@ import { deployment } from '../../../packages/shared/src/local.js';
 import { readCard } from '../../../packages/shared/src/card.js';
 import { numbersFromMessage, statistics } from '../../../packages/shared/src/statistics.js';
 import { createPaymentGate } from './payment-gate.js';
+import { assertDeployment } from '../../../packages/shared/src/local.js';
 
 export async function createService(options: { unpaidHarness?: boolean } = {}) {
   const config = deployment();
@@ -32,7 +33,10 @@ export async function createService(options: { unpaidHarness?: boolean } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '64kb' }));
-  app.get('/health', (_req, res) => res.json({ ok: true, executions: gate?.getExecutions() ?? executions, mode: options.unpaidHarness ? 'unpaid-test-harness' : 'payment-required' }));
+  app.get('/health', async (_req, res) => {
+    try { await assertDeployment(config); res.json({ ok: true, anchor: config.anchor, executions: gate?.getExecutions() ?? executions, mode: options.unpaidHarness ? 'unpaid-test-harness' : 'payment-required' }); }
+    catch (error) { res.status(503).json({ ok: false, error: (error as Error).message }); }
+  });
   app.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: handler }));
   app.post('/', (req, res, next) => {
     if (req.body?.method === 'SendMessage') {

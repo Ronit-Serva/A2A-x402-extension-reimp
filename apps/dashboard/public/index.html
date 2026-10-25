@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A2A Payment Lab · Local execution</title>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="Payment Lab home"><span class="mark">↗</span><span>A2A <b>Payment Lab</b></span></a><div class="environment"><span class="dot"></span>LOCAL SANDBOX <span class="divider">/</span> CHAIN 31337</div><span id="connection" class="connection">Connecting…</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">INSIDE THE PROTOCOL</p><h1>Follow the request.<br><span>Watch the payment.</span></h1><p class="lede">Run an agent-to-agent exchange, one step at a time. Every arrow is a real request. Every payment settles on your local blockchain.</p></div><aside class="intro-note"><span class="small-label">THE EXPERIMENT</span><p>One statistics request.<br>Four independent actors.<br><strong>2 TestUSD per new call.</strong></p><span>Test tokens · No public network</span></aside></section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="services" id="services" aria-label="Process status"></section>
+    <div class="workspace">
+      <aside class="workflow panel">
+        <div class="panel-heading"><span class="eyebrow">01 / CONTROL ROOM</span><span class="pill">MANUAL</span></div>
+        <h2>Prepare your lab</h2><p class="muted">Start each component, then advance the protocol yourself.</p>
+        <ol id="setup" class="setup-list"></ol>
+        <div class="request-form"><label for="numbers">Numbers to calculate</label><textarea id="numbers" rows="2" spellcheck="false">[2, 4, 6]</textarea><p class="hint">A JSON array · 1–1,000 finite numbers</p><button id="start-run" class="primary">Begin walkthrough <span>↗</span></button><p class="hint">A new completed call costs 2 TestUSD. A 60-second pause expires the current checkpoint.</p></div>
+        <div class="run-picker"><label for="run-select">Session runs</label><select id="run-select"><option value="">No runs yet</option></select><p id="run-state" class="hint">Your next run will appear here.</p></div>
+      </aside>
+      <section class="execution panel">
+        <div class="panel-heading"><span class="eyebrow">02 / LIVE EXECUTION</span><span id="run-badge" class="pill">AWAITING RUN</span></div>
+        <div class="section-title"><h2>The journey of a paid request</h2><button id="diagram-help" class="text-button">How to read this ↗</button></div>
+        <div class="actor-legend"><span class="actor-client">● Client</span><span class="actor-server">● Server</span><span class="actor-facilitator">● Facilitator</span><span class="actor-chain">● Blockchain</span></div>
+        <div class="diagram-scroll"><svg id="diagram" viewBox="0 0 720 684" role="img" aria-label="Four-participant payment sequence. Select a step in the list below for its explanation."></svg></div>
+        <details class="sequence-text"><summary>All protocol steps and explanations</summary><ol id="sequence-list"></ol></details>
+        <section class="next-action" aria-live="polite"><div class="small-label" id="next-label">READY WHEN YOU ARE</div><h3 id="next-title">Bring the local services online</h3><p id="next-description">Start the blockchain, compile and deploy the contracts, then start the facilitator and server.</p><div id="countdown" class="hint"></div><div class="action-row"><button id="continue" class="primary" disabled>Continue</button><button id="cancel" class="secondary" hidden>Cancel run</button><button id="reconcile" class="secondary" hidden>Reconcile same attempt</button><button id="close-outcome" class="secondary" hidden>Acknowledge recorded outcome</button></div></section>
+      </section>
+      <aside class="evidence panel">
+        <div class="panel-heading"><span class="eyebrow">03 / EVIDENCE</span><button id="refresh-evidence" class="text-button">Refresh ↻</button></div><h2>Proof, as it happens</h2>
+        <div class="balance-card"><div class="small-label">LIVE TOKEN BALANCES</div><div class="balance-row"><span>Client</span><strong id="client-balance">—</strong></div><div class="balance-row"><span>AgentCard</span><strong id="card-balance">—</strong></div><p id="balance-time" class="hint">Waiting for a valid deployment.</p><details><summary>Gas funding / ETH</summary><p id="gas-balances" class="hint"></p></details></div>
+        <div class="evidence-block"><h3>Payment terms</h3><div id="terms" class="empty-state">Read the on-chain AgentCard during a run to inspect its terms.</div></div>
+        <div class="evidence-block"><h3>Authorization</h3><div id="authorization" class="empty-state">The client signs locally after you approve the terms.</div></div>
+        <div class="evidence-block"><h3>Settlement receipt</h3><div id="receipt" class="empty-state">A transaction hash becomes evidence after confirmation.</div></div>
+        <div class="evidence-block"><h3>Server response</h3><div id="result" class="empty-state">Computation starts after payment confirmation.</div></div>
+        <button id="download-evidence" class="secondary full" disabled>Download run evidence ↓</button>
+      </aside>
+    </div>
+    <section class="logs panel"><div class="panel-heading"><div><span class="eyebrow">UNDER THE HOOD</span><h2>Live execution log <span id="log-count" class="counter">0</span></h2></div><div class="log-controls"><label class="sr-only" for="log-source">Log source</label><select id="log-source"><option value="all">All processes</option><option>node</option><option>compile</option><option>deploy</option><option>client</option><option>server</option><option>facilitator</option><option>dashboard</option></select><label class="sr-only" for="log-search">Search logs</label><input id="log-search" placeholder="Filter output…"><button id="autoscroll" class="secondary" aria-pressed="true">Autoscroll on</button><button id="download-logs" class="secondary">Export ↓</button></div></div><p class="hint" id="log-note">Live stdout/stderr and structured events. Signing material is removed before buffering. The latest 1,500 dashboard events are retained.</p><div id="log-output" class="log-output" tabindex="0" aria-label="Live process logs"></div></section>
+    <section class="config panel"><div class="panel-heading"><div><span class="eyebrow">UNDERSTAND YOUR CONFIGURATION</span><h2>What is in local.json?</h2></div><span id="deployment-state" class="pill">NOT VALIDATED</span></div><p class="muted">Public deployment metadata in <code>deployments/local.json</code>. Saved balance fields describe the fixture's checks; the live balances above come from RPC.</p><div id="deployment-error" class="hint"></div><div class="config-grid"><div class="config-table-wrap"><table><thead><tr><th>Field</th><th>Value</th><th>What it means</th></tr></thead><tbody id="config-fields"></tbody></table></div><aside class="config-explainer"><h3>Authorization → settlement → service</h3><p>A signature permits the specified token transfer. Verification checks it without moving tokens. The facilitator submits a transaction and pays ETH gas.</p><p>Only confirmed settlement unlocks service computation. The AgentCard contract receives TestUSD; the client can pay while holding zero ETH.</p><h3>Why the block anchor?</h3><p>Restarting Hardhat creates a fresh in-memory chain. Addresses can repeat. The stored block hash and code hashes keep old configuration from being trusted on the wrong chain.</p><h3>Fixture versus this run</h3><p>The deploy script includes payment checks and restores 100 / 0 TestUSD. Its <code>paymentTxHash</code> belongs to that check. Each walkthrough has its own receipt above.</p><details><summary>Raw public deployment JSON</summary><pre id="raw-config">Not loaded</pre></details></aside></div></section>
+    <footer><span>A2A 1.0 · x402 v2 · EIP-3009</span><span>One local node demonstrates execution. TestUSD has no monetary backing.</span></footer>
+  </main>
+  <dialog id="explanation"><button id="close-dialog" class="secondary">Close ×</button><h2 id="explanation-title"></h2><p id="explanation-copy"></p><pre id="explanation-data"></pre></dialog>
+</body>
+</html>

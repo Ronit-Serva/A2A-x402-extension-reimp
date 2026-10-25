@@ -1,0 +1,148 @@
+{
+  "passed": true,
+  "checkpoints": [
+    "read-card",
+    "unpaid-request",
+    "authorize",
+    "paid-retry",
+    "verify",
+    "settle",
+    "execute",
+    "read-card",
+    "unpaid-request",
+    "authorize",
+    "paid-retry",
+    "verify",
+    "settle",
+    "execute"
+  ],
+  "checks": [
+    "chunk-safe secret redaction",
+    "same-origin mutation protection",
+    "action allowlist",
+    "prerequisite and input errors",
+    "dashboard HTTP response",
+    "friendly CLI diagnosis for reported port-4021 error",
+    "complete real manual paid A2A request",
+    "confirmed settlement before execution",
+    "balance and token-event evidence",
+    "cancel after confirmed payment",
+    "unresolved attempt blocks new payment",
+    "same-proof recovery without second transfer",
+    "actual SSE logs and protocol events",
+    "no signer keys in public output",
+    "bounded 60-second checkpoint expiry without signing or charging",
+    "actual chain restart invalidates deployment and blocks paid runs",
+    "external node is detected and cannot be stopped by dashboard"
+  ],
+  "runs": [
+    {
+      "id": "a38d129d-1284-4a0b-8a1f-31794db20447",
+      "transaction": "0xccdbb0f4a8b5a9b34d193f2ed2cabf7f952ff430e513fb68730602c718bcb3b8",
+      "result": {
+        "requestId": "a38d129d-1284-4a0b-8a1f-31794db20447",
+        "result": {
+          "messageId": "da975c78-2ed3-420d-b6c4-2517704fadbf",
+          "contextId": "98e49c3a-5147-404e-8579-6e575f57ba23",
+          "taskId": "",
+          "role": 2,
+          "parts": [
+            {
+              "content": {
+                "$case": "data",
+                "value": {
+                  "count": 3,
+                  "sum": 12,
+                  "min": 2,
+                  "max": 6,
+                  "mean": 4
+                }
+              },
+              "filename": "",
+              "mediaType": "application/json"
+            }
+          ],
+          "extensions": [],
+          "referenceTaskIds": []
+        },
+        "receipt": {
+          "success": true,
+          "transaction": "0xccdbb0f4a8b5a9b34d193f2ed2cabf7f952ff430e513fb68730602c718bcb3b8",
+          "network": "eip155:31337",
+          "payer": "0xC2aFC2c8789c03a3388a310a7e6BDE58B13690E3"
+        },
+        "challenges": 1,
+        "signatures": 1,
+        "before": {
+          "client": "100000000",
+          "card": "0"
+        },
+        "after": {
+          "client": "98000000",
+          "card": "2000000"
+        }
+      },
+      "evidence": {
+        "requestId": "a38d129d-1284-4a0b-8a1f-31794db20447",
+        "applicationStatus": "completed",
+        "receipt": {
+          "transactionHash": "0xccdbb0f4a8b5a9b34d193f2ed2cabf7f952ff430e513fb68730602c718bcb3b8",
+          "status": "success",
+          "blockNumber": "13",
+          "blockHash": "0x8d16eddd70a99e87736c008ff53a3597eb0689407306f6f0a0d709ff5fdbfab9",
+          "gasUsed": "82621"
+        },
+        "events": [
+          {
+            "event": "AuthorizationUsed",
+            "args": {
+              "authorizer": "0xC2aFC2c8789c03a3388a310a7e6BDE58B13690E3",
+              "nonce": "0x58e4ae9eaab87defdb22b26ecafa4d7589773c241873900595c52d9b065f74e9"
+            }
+          },
+          {
+            "event": "Transfer",
+            "args": {
+              "from": "0xC2aFC2c8789c03a3388a310a7e6BDE58B13690E3",
+              "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+              "value": "2000000"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c47d5c20-53fe-4b73-b05d-e598f688bead",
+      "transaction": "0x1f0a61697aadeceee489472076eb9694d86ff679d6933ee14640bfd53e4cc166",
+      "recovered": true,
+      "evidence": {
+        "requestId": "c47d5c20-53fe-4b73-b05d-e598f688bead",
+        "applicationStatus": "completed",
+        "receipt": {
+          "transactionHash": "0x1f0a61697aadeceee489472076eb9694d86ff679d6933ee14640bfd53e4cc166",
+          "status": "success",
+          "blockNumber": "14",
+          "blockHash": "0x872c487c5b7fcf7592f10e2ae8b04346563c9bdb92f672057b935d2843df5490",
+          "gasUsed": "65521"
+        },
+        "events": [
+          {
+            "event": "AuthorizationUsed",
+            "args": {
+              "authorizer": "0xC2aFC2c8789c03a3388a310a7e6BDE58B13690E3",
+              "nonce": "0x5c441f89abbed03c640361f1132f3a876c9c7e6cda5604bba0b25095538e3422"
+            }
+          },
+          {
+            "event": "Transfer",
+            "args": {
+              "from": "0xC2aFC2c8789c03a3388a310a7e6BDE58B13690E3",
+              "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+              "value": "2000000"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

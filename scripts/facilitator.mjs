@@ -9,6 +9,7 @@ import { toFacilitatorEvmSigner } from '@x402/evm';
 import { createPublicClient, createWalletClient, defineChain, http, parseAbiItem, decodeEventLog } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { artifact, assertDeployment } from '../packages/shared/src/local.js';
+import { emit } from '../packages/shared/src/walkthrough.js';
 
 const rpcUrl = process.env.RPC_URL ?? 'http://127.0.0.1:8545';
 const manifest = JSON.parse(fs.readFileSync('deployments/local.json', 'utf8'));
@@ -54,6 +55,7 @@ const signer = { ...baseSigner, async writeContract(args) {
   records[context.key].transaction = hash;
   records[context.key].status = 'pending';
   writeRecords(records);
+  emit('facilitator', 'submitted', context.runId, { transaction: hash });
   return hash;
 } };
 const x402 = new x402Facilitator().register(`eip155:${chainId}`, new ExactEvmScheme(signer));
@@ -122,7 +124,7 @@ app.get('/health', async (_req, res) => {
   try {
     await assertDeployment(manifest);
     const actualChainId = await publicClient.getChainId();
-    res.json({ ok: actualChainId === chainId, chainId: actualChainId, address: manifest.facilitator });
+    res.json({ ok: actualChainId === chainId, chainId: actualChainId, anchor: manifest.anchor, address: manifest.facilitator });
   } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 app.get('/supported', (_req, res) => res.json(x402.getSupported()));
@@ -130,7 +132,9 @@ app.post('/verify', async (req, res) => {
   try {
     await assertDeployment(manifest);
     const { paymentPayload, paymentRequirements } = parseRequest(req.body);
-    res.json(await x402.verify(paymentPayload, paymentRequirements));
+    const result = await x402.verify(paymentPayload, paymentRequirements);
+    emit('facilitator', 'verification-result', req.header('x-local-request-id'), result);
+    res.json(result);
   } catch (error) {
     res.status(400).json({ isValid: false, invalidReason: error.message });
   }
@@ -163,7 +167,7 @@ app.post('/settle', async (req, res) => {
       writeRecords(records);
       let result;
       try {
-        result = await settling.run({ key, fault: req.header('x-local-fault') }, () => x402.settle(paymentPayload, paymentRequirements));
+        result = await settling.run({ key, runId: req.header('x-local-request-id'), fault: req.header('x-local-fault') }, () => x402.settle(paymentPayload, paymentRequirements));
       } catch { return reconcile(records[key]); }
       if (records[key].transaction || result.transaction) {
         records[key].transaction ??= result.transaction;
@@ -174,6 +178,7 @@ app.post('/settle', async (req, res) => {
       writeRecords(records);
       return result;
     });
+    emit('facilitator', response.success ? 'confirmed' : 'settlement-unresolved', req.header('x-local-request-id'), response);
     if (process.env.LOCAL_FAULTS === '1' && req.header('x-local-fault') === 'drop-settle-response') return res.destroy();
     if (!response?.success && response?.errorReason === undefined && response?.error === undefined) return res.status(409).json(response);
     return res.json(response);
