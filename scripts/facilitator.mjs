@@ -45,6 +45,16 @@ function writeRecords(records) {
   fs.renameSync(temporaryPath, recordsPath);
 }
 const records = readRecords();
+let migrated = false;
+for (const record of Object.values(records)) {
+  if (record.authorization) {
+    record.payer ??= record.authorization.from;
+    record.nonce ??= record.authorization.nonce;
+    delete record.authorization;
+    migrated = true;
+  }
+}
+if (migrated) writeRecords(records);
 const settling = new AsyncLocalStorage();
 const baseSigner = toFacilitatorEvmSigner({ ...publicClient, ...walletClient, address: manifest.facilitator }, { confirmationTimeoutMs: Number(process.env.LOCAL_CONFIRMATION_TIMEOUT_MS ?? 10_000) });
 const signer = { ...baseSigner, async writeContract(args) {
@@ -61,13 +71,14 @@ const signer = { ...baseSigner, async writeContract(args) {
 const x402 = new x402Facilitator().register(`eip155:${chainId}`, new ExactEvmScheme(signer));
 
 async function reconcile(record) {
-  const auth = record.authorization;
+  const payer = record.payer;
+  const nonce = record.nonce;
   if (!record.transaction) {
-    const logs = await publicClient.getLogs({ address: manifest.token, event: parseAbiItem('event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)'), args: { authorizer: auth.from, nonce: auth.nonce }, fromBlock: BigInt(manifest.anchor.blockNumber), toBlock: 'latest' });
+    const logs = await publicClient.getLogs({ address: manifest.token, event: parseAbiItem('event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)'), args: { authorizer: payer, nonce }, fromBlock: BigInt(manifest.anchor.blockNumber), toBlock: 'latest' });
     const hashes = [...new Set(logs.map(log => log.transactionHash))];
     if (hashes.length === 1) record.transaction = hashes[0];
   }
-  const result = { success: false, errorReason: record.transaction ? 'settlement_pending' : 'settlement_unknown', transaction: record.transaction ?? '', network: `eip155:${chainId}`, payer: auth.from };
+  const result = { success: false, errorReason: record.transaction ? 'settlement_pending' : 'settlement_unknown', transaction: record.transaction ?? '', network: `eip155:${chainId}`, payer };
   if (record.transaction) {
     let receipt;
     try { receipt = await publicClient.getTransactionReceipt({ hash: record.transaction }); }
@@ -77,8 +88,8 @@ async function reconcile(record) {
       const events = receipt.logs.filter(log => log.address.toLowerCase() === token).flatMap(log => {
         try { return [decodeEventLog({ abi: artifact('TestUSD').abi, data: log.data, topics: log.topics })]; } catch { return []; }
       });
-      const used = events.some(event => event.eventName === 'AuthorizationUsed' && event.args.authorizer.toLowerCase() === auth.from.toLowerCase() && event.args.nonce.toLowerCase() === auth.nonce.toLowerCase());
-      const transferred = events.some(event => event.eventName === 'Transfer' && event.args.from.toLowerCase() === auth.from.toLowerCase() && event.args.to.toLowerCase() === payTo && event.args.value === 2_000_000n);
+      const used = events.some(event => event.eventName === 'AuthorizationUsed' && event.args.authorizer.toLowerCase() === payer.toLowerCase() && event.args.nonce.toLowerCase() === nonce.toLowerCase());
+      const transferred = events.some(event => event.eventName === 'Transfer' && event.args.from.toLowerCase() === payer.toLowerCase() && event.args.to.toLowerCase() === payTo && event.args.value === 2_000_000n);
       if (used && transferred) { result.success = true; delete result.errorReason; record.status = 'confirmed'; }
       else { result.errorReason = 'settlement_unknown'; record.status = 'unknown'; }
     }
@@ -163,7 +174,9 @@ app.post('/settle', async (req, res) => {
         return { success: false, errorReason: verification.invalidReason ?? 'payment verification failed', payer: authorization.from, network: paymentRequirements.network };
       }
 
-      records[key] = { fingerprint, authorization, status: 'broadcasting', updatedAt: new Date().toISOString() };
+      // Retain only the public payer/nonce needed for idempotency and event-based
+      // recovery. The signed authorization and signature are never persisted.
+      records[key] = { fingerprint, payer: authorization.from, nonce: authorization.nonce, status: 'broadcasting', updatedAt: new Date().toISOString() };
       writeRecords(records);
       let result;
       try {

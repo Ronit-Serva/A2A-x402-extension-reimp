@@ -1,12 +1,13 @@
 const $ = id => document.getElementById(id);
 let state = {}, run, selected = '', token = '', pendingAction = false, autoScroll = true, lastSession = '';
+let transientPayload, transientRunId = '';
 let logEvents = [], lastLogId = 0, configKey = '', servicesKey = '', setupKey = '', runKey = '';
 const explanations = [
   ['Read AgentCard', 'client', 'chain', 'card-read', 'The client reads the AgentCard contract on the local blockchain. It validates the active flag, service URL, capability, network, token, recipient, and price. This is retrieval at a known address.'],
   ['Request service', 'client', 'server', 'unpaid-request', 'The official A2A SDK sends a JSON-RPC SendMessage request with the numbers you entered. No payment is attached, so the server must not compute the service result.'],
   ['HTTP 402 · payment required', 'server', 'client', 'challenge', 'The server returns HTTP 402 and the PAYMENT-REQUIRED header. The challenge describes the exact payment terms. This response does not transfer tokens or execute the statistics service.'],
-  ['Check terms & sign authorization', 'client', 'client', 'authorized', 'The client compares the challenge with its on-chain AgentCard and spending budget, then signs an EIP-3009 authorization. The signature specifies the payer, recipient, amount, validity period, and unique nonce. Signing alone does not transfer tokens.'],
-  ['Retry request with payment', 'client', 'server', 'paid-retry', 'The client retries the same A2A message with PAYMENT-SIGNATURE. The full signed proof stays inside the local client/server flow. The signature authorizes a transfer; application state associates it with this request.'],
+  ['Check terms & sign authorization', 'client', 'client', 'signed', 'The client compares the challenge with its on-chain AgentCard and spending budget, then signs an EIP-3009 authorization. The dashboard reveals the complete signed payload only in a temporary live view. Signing alone does not transfer tokens.'],
+  ['Retry request with payment', 'client', 'server', 'paid-retry', 'The client retries the same A2A message with PAYMENT-SIGNATURE. The temporary payload view clears as the request is sent. The signature authorizes a transfer; application state associates it with this request.'],
   ['Verify payment', 'server', 'facilitator', 'verifying', 'The server calls the separate facilitator’s /verify endpoint. Verification checks the signature and configured terms using the actual SDK. It does not reserve funds or submit a transaction.'],
   ['Authorization is valid', 'facilitator', 'server', 'verified', 'The facilitator reports a valid authorization. This is permission to attempt settlement, not a confirmed payment. The facilitator independently checks the terms again during settlement.'],
   ['Settle payment', 'server', 'facilitator', 'settling', 'The server calls /settle. Durable records associate the payer and nonce with this attempt. Matching retries reconcile the same transaction rather than creating a fresh authorization.'],
@@ -95,9 +96,9 @@ function renderSetup(){
 function renderControls(){
   const p=state.processes||{};
   $('start-run').disabled=pendingAction||state.busy||!!state.activeRun||!state.deployment?.valid||!p.server?.ready||!p.facilitator?.ready;
-  $('continue').disabled=pendingAction||!run?.checkpoint||state.activeRun?.id!==selected||Date.now()>=run.checkpoint.expiresAt;
+  const proofViewMissing=run?.checkpoint?.stage==='paid-retry'&&run.events?.some(event=>event.type==='signed')&&transientRunId!==selected;
+  $('continue').disabled=pendingAction||!run?.checkpoint||state.activeRun?.id!==selected||Date.now()>=run.checkpoint.expiresAt||proofViewMissing;
   $('cancel').hidden=!run||state.activeRun?.id!==selected;$('cancel').disabled=pendingAction;
-  $('reconcile').hidden=!run||run.resolved||!!state.activeRun||['complete','running','waiting'].includes(run.status);$('reconcile').disabled=pendingAction||!state.deployment?.valid||run?.deploymentAnchor!==state.deployment?.manifest?.anchor?.blockHash;
   $('close-outcome').hidden=!run||run.resolved||!!state.activeRun||run.status==='complete'||!['failed','paid-undelivered','completed'].includes(run.evidence?.applicationStatus);$('close-outcome').disabled=pendingAction;
   $('download-evidence').disabled=!run;
 }
@@ -105,7 +106,7 @@ function renderRun(){
   $('run-badge').textContent=run?run.status.toUpperCase():'AWAITING RUN';
   $('run-state').textContent=run?`${run.id}\n${run.status}`:'Your next run will appear here.';
   const point=run?.checkpoint;const detail=point?checkpoints[point.stage]:undefined;
-  if(detail){$('next-label').textContent='WAITING FOR YOU';$('next-title').textContent=detail[0];$('next-description').textContent=detail[1];$('continue').textContent=detail[2];}
+  if(detail){$('next-label').textContent='WAITING FOR YOU';$('next-title').textContent=detail[0];$('next-description').textContent=point.stage==='paid-retry'&&run?.events?.some(event=>event.type==='signed')&&transientRunId!==selected?'The signed payload was cleared from this browser session. It is not saved and cannot be reopened. Cancel this attempt before starting another if you need to inspect a fresh signature.':detail[1];$('continue').textContent=detail[2];}
   else if(run?.status==='complete'){$('next-label').textContent='EXCHANGE COMPLETE';$('next-title').textContent='Payment settled. Response received.';$('next-description').textContent='Inspect the real result, receipt, and token events. A new walkthrough creates a new request and costs another 2 TestUSD.';}
   else if(run?.error){$('next-label').textContent='ATTEMPT INTERRUPTED';$('next-title').textContent='Inspect the payment state';$('next-description').textContent=run.error;}
   else if(run){$('next-label').textContent='EXECUTING';$('next-title').textContent='The processes are working';$('next-description').textContent='Follow live events below. The next checkpoint will appear here when reached.';}
@@ -113,8 +114,7 @@ function renderRun(){
   explanations.forEach((entry,index)=>{const observed=run?.events?.some(event=>event.type===entry[3]);$('arrow-'+index).setAttribute('class',`arrow-group ${observed?'observed':''} ${detail?.[3]===index?'current':''}`);});
   const terms=run?.events?.find(event=>event.type==='terms-validated')?.data;
   if(terms)rows($('terms'),[['Network',terms.network],['Price',`${amount(terms.amount)} TestUSD (${terms.amount} base units)`],['Asset',terms.asset],['Pay to',terms.payTo],['Scheme',terms.scheme]]);else blank($('terms'),'Read the AgentCard and send an unpaid request to inspect its validated terms.');
-  const auth=run?.events?.find(event=>event.type==='authorized')?.data?.authorization;
-  if(auth)rows($('authorization'),[['From',auth.from],['To',auth.to],['Value',`${amount(auth.value)} TestUSD`],['Nonce',auth.nonce],['Valid after',new Date(Number(auth.validAfter)*1000).toLocaleString()],['Valid until',new Date(Number(auth.validBefore)*1000).toLocaleString()]]);else blank($('authorization'),'The client signs locally after you approve the terms.');
+  renderTransientPayload();
   const evidence=run?.evidence;
   if(evidence?.receipt){const r=evidence.receipt;rows($('receipt'),[['Status',r.status],['Tx hash',r.transactionHash],['Block',r.blockNumber],['Gas used',r.gasUsed],['App state',evidence.applicationStatus]]);const details=element('details');details.append(element('summary','Token / authorization events'),element('pre',pretty(evidence.events)));$('receipt').append(details);}
   else if(run?.transaction||evidence?.transaction)rows($('receipt'),[['Tx hash',run.transaction||evidence.transaction],['Status','Confirmation not independently established yet']]);
@@ -122,7 +122,24 @@ function renderRun(){
   if(run?.result){$('result').className='';$('result').replaceChildren(element('pre',pretty(run.result.result)));const details=element('details');details.append(element('summary','Full response, receipt & balances'),element('pre',pretty(run.result)));$('result').append(details);}else blank($('result'),'Computation starts after payment confirmation.');
   renderCountdown();renderControls();
 }
-function renderCountdown(){const point=run?.checkpoint;$('countdown').textContent=point?`Checkpoint expires in ${Math.max(0,Math.ceil((point.expiresAt-Date.now())/1000))}s.${['paid-retry','verify','settle'].includes(point.stage)?' Signed authorizations also have a finite validity window.':''}`:'';renderControls();}
+function renderCountdown(){const point=run?.checkpoint;const authorization=transientPayload?.payload?.authorization;if(authorization?.validBefore&&Date.now()>=Number(authorization.validBefore)*1000)clearTransientPayload();$('countdown').textContent=point?`Checkpoint expires in ${Math.max(0,Math.ceil((point.expiresAt-Date.now())/1000))}s.${transientPayload?' · Payment signature expires in '+Math.max(0,Math.ceil(Number(authorization.validBefore)-Date.now()/1000))+'s.':''}`:'';renderControls();}
+function clearTransientPayload(){transientPayload=undefined;transientRunId='';blank($('authorization'),'The client creates its payment authorization after you approve the terms.');}
+function renderTransientPayload(){
+  const payload=transientRunId===selected?transientPayload:undefined;
+  if(!payload){
+    const wasSigned=run?.events?.some(event=>event.type==='signed');
+    blank($('authorization'),wasSigned?'The client signed this request, but its live payload view was cleared on refresh or disconnect. The signature was not saved and cannot be recovered. Cancel or inspect the recorded payment outcome before another request.':'The client creates its payment authorization after you approve the terms.');
+    return;
+  }
+  const authorization=payload.payload?.authorization;
+  if(authorization?.validBefore&&Date.now()>=Number(authorization.validBefore)*1000){clearTransientPayload();notice('The displayed payment authorization expired and was cleared. No new signature was created.');return;}
+  $('authorization').className='';
+  $('authorization').replaceChildren(element('p',`x402 v${payload.x402Version} · ${payload.accepted.scheme} · ${payload.accepted.network}`,'payload-label'));
+  const fields=[['Payer',authorization?.from],['Recipient',authorization?.to],['Amount',`${amount(authorization?.value)} TestUSD`],['Valid after',new Date(Number(authorization?.validAfter)*1000).toLocaleString()],['Valid until',new Date(Number(authorization?.validBefore)*1000).toLocaleString()],['Nonce',authorization?.nonce],['Signature',payload.payload?.signature]];
+  rows($('authorization'),fields);
+  const warning=element('p','This 65-byte signature can authorize the displayed transfer until expiry. Anyone who can read this local dashboard can copy it. The dashboard clears it when retry starts. Private signer keys are never included.','security-note');
+  const details=element('details');details.append(element('summary','Full signed x402 payload'),element('pre',pretty(payload)));$('authorization').append(details,warning);
+}
 function renderState(){
   renderServices();renderSetup();
   const balance=state.deployment?.balances;
@@ -146,9 +163,8 @@ function download(name,data){const blob=new Blob([pretty(data)],{type:'applicati
 $('start-run').addEventListener('click',()=>perform(async()=>{let numbers;try{numbers=JSON.parse($('numbers').value);}catch{throw new Error('Enter a valid JSON array, such as [2, 4, 6].');}const created=await api('/api/runs',{numbers});selected=created.id;run=created;renderRun();}));
 $('continue').addEventListener('click',()=>perform(()=>api(`/api/runs/${selected}/continue`,{checkpointId:run.checkpoint.checkpointId})));
 $('cancel').addEventListener('click',()=>perform(()=>api(`/api/runs/${selected}/cancel`,{})));
-$('reconcile').addEventListener('click',()=>perform(()=>api(`/api/runs/${selected}/reconcile`,{})));
 $('close-outcome').addEventListener('click',()=>perform(()=>api(`/api/runs/${selected}/close`,{})));
-$('run-select').addEventListener('change',()=>{selected=$('run-select').value;run=undefined;void loadRun();});
+$('run-select').addEventListener('change',()=>{clearTransientPayload();selected=$('run-select').value;run=undefined;void loadRun();});
 $('refresh-evidence').addEventListener('click',()=>perform(async()=>{await poll();await loadRun();}));
 $('download-evidence').addEventListener('click',()=>download(`a2a-run-${selected}.json`,{sessionId:state.sessionId,exportedAt:new Date().toISOString(),deploymentAnchor:run.deploymentAnchor,...run}));
 $('download-logs').addEventListener('click',()=>download('a2a-sanitized-logs.json',logEvents));
@@ -160,9 +176,11 @@ drawDiagram();
 const stream=new EventSource('/api/events');
 stream.onopen=()=>{$('connection').textContent='● Live connection';};
 stream.onerror=()=>{$('connection').textContent='Reconnecting…';};
-stream.addEventListener('session',event=>{const data=JSON.parse(event.data);if(lastSession&&lastSession!==data.sessionId){logEvents=[];lastLogId=0;selected='';run=undefined;notice('Dashboard backend restarted. Old local runtime records remain on disk; inspect the previous payment before beginning another attempt.');}lastSession=data.sessionId;if(data.historyTruncated)$('log-note').textContent='Earlier session events were evicted. Showing the retained event window; historical fixture evidence is not substituted.';});
+stream.addEventListener('session',event=>{const data=JSON.parse(event.data);if(lastSession&&lastSession!==data.sessionId){clearTransientPayload();logEvents=[];lastLogId=0;selected='';run=undefined;notice('Dashboard session restarted. The temporary payment payload and in-memory run history were cleared.');}lastSession=data.sessionId;if(data.historyTruncated)$('log-note').textContent='Earlier session events were evicted. Showing the retained event window; historical fixture evidence is not substituted.';});
 let logScheduled=false;
-stream.onmessage=event=>{const item=JSON.parse(event.data);if(item.id<=lastLogId)return;lastLogId=item.id;logEvents.push(item);if(logEvents.length>1500)logEvents.shift();if(!logScheduled){logScheduled=true;setTimeout(()=>{renderLogs();logScheduled=false;},100);}if(item.runId===selected&&item.type!=='log')void loadRun();};
+stream.addEventListener('volatile-payment-payload',event=>{const item=JSON.parse(event.data);clearTransientPayload();transientRunId=item.runId;transientPayload=item.data;renderTransientPayload();});
+stream.onmessage=event=>{const item=JSON.parse(event.data);if(item.id<=lastLogId)return;lastLogId=item.id;logEvents.push(item);if(logEvents.length>1500)logEvents.shift();if(['paid-retry','failure','result'].includes(item.type)&&item.runId===transientRunId)clearTransientPayload();if(logScheduled===false){logScheduled=true;setTimeout(()=>{renderLogs();logScheduled=false;},100);}if(item.runId===selected&&item.type!=='log')void loadRun();};
+window.addEventListener('pagehide',clearTransientPayload);
 void poll().then(loadRun).catch(error=>notice(error.message));
 setInterval(()=>void poll().catch(()=>{$('connection').textContent='Backend unavailable';}),1200);
 setInterval(()=>void loadRun(),2200);setInterval(renderCountdown,1000);

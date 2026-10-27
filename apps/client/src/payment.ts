@@ -7,8 +7,7 @@ import type { PaymentPayload, PaymentRequired, SettleResponse } from '@x402/core
 import { requirements } from '../../../packages/shared/src/card.js';
 import type { Deployment } from '../../../packages/shared/src/local.js';
 import { canonical } from '../../../packages/shared/src/store.js';
-import fs from 'node:fs';
-import { checkpoint, emit, walkthroughEnabled } from '../../../packages/shared/src/walkthrough.js';
+import { checkpoint, emit, emitTransient, walkthroughEnabled } from '../../../packages/shared/src/walkthrough.js';
 
 export function checkChallenge(challenge: PaymentRequired, card: AgentCard, config: Deployment, budget = 2_000_000n) {
   const terms = requirements(config);
@@ -18,7 +17,7 @@ export function checkChallenge(challenge: PaymentRequired, card: AgentCard, conf
 }
 export function paidFetch(card: AgentCard, config: Deployment, account: LocalAccount, fetchImpl: typeof fetch = fetch, runId?: string) {
   const scheme = new ExactEvmScheme(toClientEvmSigner(account));
-  const state: { signatures: number; challenges: number; receipt?: SettleResponse; payload?: PaymentPayload; requestBody?: string } = { signatures: 0, challenges: 0 };
+  const state: { signatures: number; challenges: number; receipt?: SettleResponse } = { signatures: 0, challenges: 0 };
   const fetchPayment: typeof fetch = async (input, init) => {
     if (walkthroughEnabled) init = { ...init, signal: AbortSignal.any([AbortSignal.timeout(240_000), ...(init?.signal ? [init.signal] : [])]) };
     emit('client', 'unpaid-request', runId, { endpoint: String(input), body: init?.body });
@@ -33,15 +32,9 @@ export function paidFetch(card: AgentCard, config: Deployment, account: LocalAcc
       const created = await scheme.createPaymentPayload(2, terms);
       const payload: PaymentPayload = { x402Version: 2, accepted: terms, payload: created.payload };
       state.signatures++;
-      state.payload = payload;
-      state.requestBody = String(init?.body);
-      if (walkthroughEnabled) {
-        // Persist the proof in ignored local runtime before submission so interrupted
-        // runs can be reconciled without creating a fresh authorization.
-        fs.writeFileSync(`runtime/walkthrough-${runId}.json`, JSON.stringify({ requestId: runId, anchor: config.anchor, body: state.requestBody, payload }), { mode: 0o600 });
-      }
-      emit('client', 'authorized', runId, { authorization: payload.payload.authorization });
-      await checkpoint('client', 'paid-retry', runId ?? '', { authorization: payload.payload.authorization });
+      if (runId) emitTransient('payment-payload', runId, payload);
+      emit('client', 'signed', runId, { message: 'EIP-3009 payment payload created in client memory.' });
+      await checkpoint('client', 'paid-retry', runId ?? '', { signatureCreated: true });
       const authorization = payload.payload.authorization as { validBefore?: string };
       if (authorization.validBefore && Number(authorization.validBefore) * 1000 <= Date.now()) throw new Error('Authorization expired before submission. This attempt was not submitted; begin a new walkthrough.');
       const headers = new Headers(init?.headers);

@@ -26,17 +26,29 @@ const listeners = new Set<Response>();
 const events: Event[] = [];
 const runs = new Map<string, Run>();
 const historyPath = 'runtime/dashboard-runs.json';
+// Remove payment proofs left by previous dashboard versions. Only non-sensitive
+// run summaries persist; signatures remain in client/browser memory only. Signing
+// keys stay in the runtime files required by the project and are never read here.
+if (fs.existsSync('runtime')) {
+  for (const file of fs.readdirSync('runtime')) {
+    if (file === 'last-paid-request.json' || /^walkthrough-[a-f0-9-]+\.json$/.test(file)) {
+      try { fs.unlinkSync(path.join('runtime', file)); } catch { /* A missing legacy proof is already cleared. */ }
+    }
+  }
+}
 try {
-  const history: Run[] = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
-  for (const run of history.slice(-30)) {
-    if (['waiting', 'running'].includes(run.status)) { run.status = 'interrupted — inspect payment'; run.error = 'Dashboard session ended during this attempt. Restore matching services and reconcile the same attempt.'; }
-    run.checkpoint = undefined;
+  const history: Partial<Run>[] = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
+  for (const saved of history.slice(-30)) {
+    if (!saved.id || !saved.deploymentAnchor || !Array.isArray(saved.numbers)) continue;
+    const run: Run = { id: saved.id, status: saved.status === 'running' || saved.status === 'waiting' ? 'interrupted — inspect payment' : saved.status ?? 'interrupted', startedAt: saved.startedAt ?? new Date().toISOString(), numbers: saved.numbers, deploymentAnchor: saved.deploymentAnchor, events: [], transaction: saved.transaction, submitted: saved.submitted, resolved: saved.resolved };
+    if (run.status.startsWith('interrupted')) run.error = 'Dashboard session ended. No signed authorization was saved. Inspect the recorded payment state before starting a new run.';
     runs.set(run.id, run);
   }
-} catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Dashboard history could not be read; existing payment stores were preserved.'); }
+} catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Dashboard run summaries could not be read.'); }
 function saveRuns() {
   fs.mkdirSync('runtime', { recursive: true, mode: 0o700 });
-  fs.writeFileSync(`${historyPath}.tmp`, json([...runs.values()].slice(-30)), { mode: 0o600 });
+  const summaries = [...runs.values()].slice(-30).map(({ id, status, startedAt, numbers, deploymentAnchor, transaction, submitted, resolved }) => ({ id, status, startedAt, numbers, deploymentAnchor, transaction, submitted, resolved }));
+  fs.writeFileSync(`${historyPath}.tmp`, json(summaries), { mode: 0o600 });
   fs.renameSync(`${historyPath}.tmp`, historyPath);
 }
 let sequence = 0;
@@ -44,6 +56,8 @@ let busy = false;
 let activeId: string | undefined;
 let snapshot: any = { loading: true, processes: {}, deployment: { valid: false }, runtime: { node: process.version }, sessionId };
 const json = (value: unknown) => JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item);
+// Rewrite any legacy run history without its former event bodies or auth details.
+saveRuns();
 function publish(source: string, type: string, data?: unknown, runId?: string, timestamp = new Date().toISOString()) {
   const event: Event = { id: ++sequence, timestamp, source, type, runId, data: sanitize(data) };
   events.push(event);
@@ -52,17 +66,26 @@ function publish(source: string, type: string, data?: unknown, runId?: string, t
   if (run) {
     if (run.events.length < 500) run.events.push(event);
     if (type === 'checkpoint') { run.checkpoint = { ...event.data, source }; run.status = 'waiting'; }
-    if (type === 'paid-retry' || type === 'submitted' || type === 'paid' || type === 'reconciling') run.submitted = true;
+    if (type === 'paid-retry' || type === 'submitted' || type === 'paid') run.submitted = true;
     if (event.data?.transaction) run.transaction = event.data.transaction;
     if (type === 'result') { run.result = event.data; run.status = 'complete'; run.checkpoint = undefined; }
-    if (type === 'failure') { run.error = event.data?.message; run.status = run.submitted ? 'interrupted — inspect payment' : 'failed'; run.checkpoint = undefined; }
-    saveRuns();
+    if (type === 'failure' && !run.resolved) { run.error = event.data?.message; run.status = run.submitted ? 'interrupted — inspect payment' : 'failed'; run.checkpoint = undefined; }
+    if (type === 'result') run.events = run.events.filter(item => item.type !== 'signed');
+    if (type !== 'log') saveRuns();
   }
   for (const response of listeners) {
     if (response.writableLength > 512_000) { response.end(); listeners.delete(response); continue; }
     response.write(`id: ${event.id}\ndata: ${json(event)}\n\n`);
   }
   return event;
+}
+function publishTransient(type: string, runId: string, data: unknown) {
+  const message = json({ type, runId, data });
+  // Intentionally no event id, replay buffer, run store, log, or file write.
+  for (const response of listeners) {
+    if (response.writableLength > 512_000) { response.end(); listeners.delete(response); continue; }
+    response.write(`event: volatile-${type}\ndata: ${message}\n\n`);
+  }
 }
 async function occupied(portNumber: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -123,6 +146,10 @@ function launch(name: Name, args: string[], env: Record<string, string> = {}, ru
     output!.on('data', chunk => reader.write(chunk)); output!.on('end', () => reader.end());
   }
   child.on('message', (message: any) => {
+    if (message?.kind === 'transient' && message.type === 'payment-payload' && typeof message.runId === 'string') {
+      publishTransient(message.type, message.runId, message.data);
+      return;
+    }
     if (message?.kind === 'event') publish(name, message.type, message.data, message.runId ?? runId, message.timestamp);
   });
   child.on('error', error => {
@@ -233,7 +260,13 @@ app.post('/api/processes/:name/stop', route(async req => {
 app.post('/api/runs', route(async req => {
   if (activeId || busy) throw new Error('A run or setup operation is active.');
   await refresh();
-  if ([...runs.values()].some(run => run.submitted && run.status !== 'complete' && !run.resolved && run.deploymentAnchor === snapshot.deployment.manifest?.anchor.blockHash)) throw new Error('An interrupted payment attempt needs reconciliation. Select it and use Reconcile same attempt before starting a new paid run.');
+  const deployedRequests = snapshot.deployment.manifest?.anchor?.blockHash ? `runtime/${snapshot.deployment.manifest.anchor.blockHash}/requests.json` : '';
+  if (deployedRequests && fs.existsSync(deployedRequests)) {
+    const records = JSON.parse(fs.readFileSync(deployedRequests, 'utf8')).requests ?? {};
+    const acknowledged = new Set([...runs.values()].filter(run => run.resolved).map(run => run.id));
+    const unresolved = Object.entries(records).filter(([id, record]: [string, any]) => ['verified', 'pending', 'paid'].includes(record.status) && !acknowledged.has(id));
+    if (unresolved.length) throw new Error(`An earlier request has unresolved payment state (${unresolved.map(([id, item]: [string, any]) => `${id}: ${item.status}`).join(', ')}). Inspect its on-chain receipt or redeploy the local fixture before starting another payment.`);
+  }
   const numbers = req.body?.numbers;
   if (!Array.isArray(numbers) || numbers.length < 1 || numbers.length > 1000 || !numbers.every(value => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1e12)) throw new Error('Enter 1–1000 finite numbers with magnitude at most 1e12.');
   if (!snapshot.deployment.valid || !snapshot.processes.server.ready || !snapshot.processes.facilitator.ready) throw new Error('Deploy a valid fixture and start both services first.');
@@ -242,22 +275,11 @@ app.post('/api/runs', route(async req => {
   const id = crypto.randomUUID();
   const run: Run = { id, status: 'running', startedAt: new Date().toISOString(), numbers, events: [], deploymentAnchor: snapshot.deployment.manifest.anchor.blockHash };
   runs.set(id, run); activeId = id;
-  if (runs.size > 30) { const oldest = [...runs.values()].find(item => item.id !== id && (item.status === 'complete' || !item.submitted || item.deploymentAnchor !== run.deploymentAnchor)); if (oldest) runs.delete(oldest.id); }
+  if (runs.size > 30) { const oldest = [...runs.values()].find(item => item.id !== id); if (oldest) runs.delete(oldest.id); }
+  saveRuns();
   send('server', { kind: 'arm', runId: id });
   launch('client', ['--import', 'tsx', 'apps/client/src/index.ts', json(numbers)], { LOCAL_RUN_ID: id }, id);
   return run;
-}));
-app.post('/api/runs/:id/reconcile', route(async req => {
-  if (activeId || busy) throw new Error('Finish the active operation first.');
-  const run = runs.get(req.params.id);
-  if (!run || run.status === 'complete' || run.resolved) throw new Error('Select an interrupted attempt.');
-  await refresh();
-  if (!snapshot.deployment.valid || snapshot.deployment.manifest.anchor.blockHash !== run.deploymentAnchor || !snapshot.processes.server.ready || !snapshot.processes.facilitator.ready || snapshot.processes.server.ownership !== 'dashboard') throw new Error('Restore matching deployment and dashboard-owned services before reconciliation.');
-  if (!fs.existsSync(`runtime/walkthrough-${run.id}.json`)) throw new Error('This attempt never created an authorization. Start a new walkthrough.');
-  run.error = undefined; run.status = 'running'; activeId = run.id;
-  send('server', { kind: 'arm', runId: run.id });
-  launch('client', ['--import', 'tsx', 'apps/client/src/index.ts'], { LOCAL_RUN_ID: run.id, LOCAL_RESUME_ID: run.id }, run.id);
-  return { ok: true };
 }));
 app.post('/api/runs/:id/close', route(async req => {
   if (activeId || busy) throw new Error('Finish the active operation first.');
@@ -265,8 +287,9 @@ app.post('/api/runs/:id/close', route(async req => {
   if (!run) throw new Error('Unknown run');
   if (run.deploymentAnchor !== deployment().anchor.blockHash) throw new Error('This run belongs to a different deployment.');
   const observed = await evidence(run);
-  if (!['failed', 'paid-undelivered', 'completed'].includes(observed.applicationStatus)) throw new Error('There is no definitive stored outcome to acknowledge. Pending or unknown payment must be reconciled.');
+  if (!['failed', 'paid', 'paid-undelivered', 'completed'].includes(observed.applicationStatus)) throw new Error('There is no definitive stored outcome to acknowledge. Pending or unknown payment must be reconciled.');
   run.resolved = true; run.status = `closed — ${observed.applicationStatus}`;
+  run.submitted = true; saveRuns();
   publish('dashboard', 'outcome-acknowledged', observed, run.id);
   return { ok: true };
 }));
@@ -283,6 +306,7 @@ app.post('/api/runs/:id/continue', route(async req => {
   if (Date.now() >= run.checkpoint.expiresAt) throw new Error('Checkpoint expired. Inspect this run before starting another.');
   const point = run.checkpoint;
   run.checkpoint = undefined; run.status = 'running';
+  saveRuns();
   send(point.source, { kind: 'continue', runId: run.id, checkpointId: point.checkpointId });
   publish('dashboard', 'continued', { stage: point.stage }, run.id);
   return { ok: true };

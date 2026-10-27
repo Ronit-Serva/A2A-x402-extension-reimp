@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { Message } from '@a2a-js/sdk';
 import { ClientFactory, JsonRpcTransportFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk/client';
@@ -28,7 +27,6 @@ export async function runPaid(numbers: number[] = [2, 4, 6], requestId: string =
   await checkpoint('client', 'unpaid-request', requestId, { numbers });
   const result = await client.sendMessage({ tenant: '', message: Message.fromJSON({ messageId: requestId, role: 'ROLE_USER', parts: [{ data: { numbers }, mediaType: 'application/json' }] }), configuration: undefined, metadata: undefined }, { serviceParameters: ServiceParameters.create(withA2AExtensions(EXTENSION)) });
   const output = { requestId, result, receipt: payment.state.receipt, challenges: payment.state.challenges, signatures: payment.state.signatures, before, after: await balances() };
-  fs.writeFileSync('runtime/last-paid-request.json', JSON.stringify({ requestId, body: payment.state.requestBody, payload: payment.state.payload }, null, 2));
   emit('client', 'result', requestId, output);
   return output;
 }

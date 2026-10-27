@@ -23,6 +23,11 @@ if (walkthroughEnabled) {
 export function emit(source: string, type: string, runId?: string, data?: unknown) {
   if (walkthroughEnabled && process.connected) process.send!({ kind: 'event', source, type, runId, timestamp: new Date().toISOString(), data });
 }
+// Live-only delivery for the signed payment proof. This event must never enter
+// the normal event ring, run history, logs, or exported evidence.
+export function emitTransient(type: string, runId: string, data: unknown) {
+  if (walkthroughEnabled && process.connected) process.send!({ kind: 'transient', type, runId, data });
+}
 export async function checkpoint(source: string, stage: string, runId: string, data?: unknown) {
   if (!walkthroughEnabled || (source !== 'client' && !armed.has(runId))) return;
   const checkpointId = crypto.randomUUID();

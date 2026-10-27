@@ -2,7 +2,8 @@ node_modules/
 artifacts/
 cache/
 runtime/
-
+a2a-x402-local/
+evidence/
 .env
 .env.*
 !.env.example
@@ -11,3 +12,5 @@ DECISIONS.md
 iterate.md
 PROGRESS.md
 README.md
+WALKTHROUGH.md
+PAPER_COMPARISON.md
