@@ -2,6 +2,12 @@ node_modules/
 artifacts/
 cache/
 runtime/
+
 .env
 .env.*
 !.env.example
+local.json
+DECISIONS.md
+iterate.md
+PROGRESS.md
+README.md
