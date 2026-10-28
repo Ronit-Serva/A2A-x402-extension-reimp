@@ -66,7 +66,10 @@ function publish(source: string, type: string, data?: unknown, runId?: string, t
   if (run) {
     if (run.events.length < 500) run.events.push(event);
     if (type === 'checkpoint') { run.checkpoint = { ...event.data, source }; run.status = 'waiting'; }
-    if (type === 'paid-retry' || type === 'submitted' || type === 'paid') run.submitted = true;
+    // A paid retry is only an HTTP request. It does not mean the facilitator
+    // broadcast a transaction. Keep interruption status for settlement states
+    // where a transfer may actually be in flight.
+    if (['submitted', 'paid', 'pending', 'settlement-unresolved'].includes(type)) run.submitted = true;
     if (event.data?.transaction) run.transaction = event.data.transaction;
     if (type === 'result') { run.result = event.data; run.status = 'complete'; run.checkpoint = undefined; }
     if (type === 'failure' && !run.resolved) { run.error = event.data?.message; run.status = run.submitted ? 'interrupted — inspect payment' : 'failed'; run.checkpoint = undefined; }
@@ -264,7 +267,9 @@ app.post('/api/runs', route(async req => {
   if (deployedRequests && fs.existsSync(deployedRequests)) {
     const records = JSON.parse(fs.readFileSync(deployedRequests, 'utf8')).requests ?? {};
     const acknowledged = new Set([...runs.values()].filter(run => run.resolved).map(run => run.id));
-    const unresolved = Object.entries(records).filter(([id, record]: [string, any]) => ['verified', 'pending', 'paid'].includes(record.status) && !acknowledged.has(id));
+    // `verified` means the facilitator accepted the authorization, but has not
+    // submitted a transfer. A fresh request with a new id/authorization is safe.
+    const unresolved = Object.entries(records).filter(([id, record]: [string, any]) => ['pending', 'paid'].includes(record.status) && !acknowledged.has(id));
     if (unresolved.length) throw new Error(`An earlier request has unresolved payment state (${unresolved.map(([id, item]: [string, any]) => `${id}: ${item.status}`).join(', ')}). Inspect its on-chain receipt or redeploy the local fixture before starting another payment.`);
   }
   const numbers = req.body?.numbers;

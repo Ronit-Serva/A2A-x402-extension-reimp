@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { Message } from '@a2a-js/sdk';
 import { ClientFactory, JsonRpcTransportFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk/client';

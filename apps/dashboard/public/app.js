@@ -108,7 +108,12 @@ function renderRun(){
   const point=run?.checkpoint;const detail=point?checkpoints[point.stage]:undefined;
   if(detail){$('next-label').textContent='WAITING FOR YOU';$('next-title').textContent=detail[0];$('next-description').textContent=point.stage==='paid-retry'&&run?.events?.some(event=>event.type==='signed')&&transientRunId!==selected?'The signed payload was cleared from this browser session. It is not saved and cannot be reopened. Cancel this attempt before starting another if you need to inspect a fresh signature.':detail[1];$('continue').textContent=detail[2];}
   else if(run?.status==='complete'){$('next-label').textContent='EXCHANGE COMPLETE';$('next-title').textContent='Payment settled. Response received.';$('next-description').textContent='Inspect the real result, receipt, and token events. A new walkthrough creates a new request and costs another 2 TestUSD.';}
-  else if(run?.error){$('next-label').textContent='ATTEMPT INTERRUPTED';$('next-title').textContent='Inspect the payment state';$('next-description').textContent=run.error;}
+  else if(run?.error){
+    const paymentMayHaveMoved=!!run.submitted||!!run.transaction||['pending','paid','paid-undelivered','completed'].includes(run.evidence?.applicationStatus);
+    $('next-label').textContent=paymentMayHaveMoved?'ATTEMPT INTERRUPTED':'REQUEST FAILED';
+    $('next-title').textContent=paymentMayHaveMoved?'Inspect the payment state':'No transfer was confirmed';
+    $('next-description').textContent=paymentMayHaveMoved?`${run.error} Check the receipt and stored request status below before retrying.`:`${run.error} The dashboard found no submitted transaction for this attempt. Fix the reported service issue, then start a fresh request.`;
+  }
   else if(run){$('next-label').textContent='EXECUTING';$('next-title').textContent='The processes are working';$('next-description').textContent='Follow live events below. The next checkpoint will appear here when reached.';}
   else{$('next-label').textContent='READY WHEN YOU ARE';$('next-title').textContent='Bring the local services online';$('next-description').textContent='Start the blockchain, compile and deploy the contracts, then start the facilitator and server.';}
   explanations.forEach((entry,index)=>{const observed=run?.events?.some(event=>event.type===entry[3]);$('arrow-'+index).setAttribute('class',`arrow-group ${observed?'observed':''} ${detail?.[3]===index?'current':''}`);});
